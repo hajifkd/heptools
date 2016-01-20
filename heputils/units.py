@@ -24,23 +24,23 @@ def sameunits(f):
 
 class Unit(object):
 
-    def __new__(cls, coeff, **kwargs):
-        flag = False
-        newargs = {}
-        for k in kwargs:
-            if kwargs[k]:
-                flag = True
-                newargs[k] = kwargs[k]
-        if flag:
-            return super(Unit, cls).__new__(cls, coeff, **newargs)
-        else:
-            return coeff
-
     def __init__(self, coeff, **kwargs):
         self.coeff = coeff
         self.units = {}
         for k in kwargs:
-            self.units[k] = kwargs[k]
+            if kwargs[k]:
+                self.units[k] = kwargs[k]
+
+    def __new__(cls, coeff, **kwargs):
+        flag = False
+        for k in kwargs:
+            if kwargs[k]:
+                flag = True
+                break
+        if flag:
+            return super(Unit, cls).__new__(cls)
+        else:
+            return coeff
 
     def __str__(self):
         res = '%3.2e' % self.coeff

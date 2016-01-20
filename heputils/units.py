@@ -6,6 +6,9 @@
 import functools
 from sympy import Rational
 
+# this might be useful
+from math import pi
+
 BASE='GeV'
 
 class UnitNotMatchError(Exception):
@@ -19,7 +22,19 @@ def sameunits(f):
         return f(u1, u2)
     return wrapper
 
-class Unit():
+class Unit(object):
+
+    def __new__(cls, coeff, **kwargs):
+        flag = False
+        newargs = {}
+        for k in kwargs:
+            if kwargs[k]:
+                flag = True
+                newargs[k] = kwargs[k]
+        if flag:
+            return super(Unit, cls).__new__(cls, coeff, **newargs)
+        else:
+            return coeff
 
     def __init__(self, coeff, **kwargs):
         self.coeff = coeff
@@ -44,6 +59,9 @@ class Unit():
             else:
                 res += ' * %s**(%s)' % (k, str(self.units[k]))
         return res
+
+    def __call__(self, coeff):
+        return coeff * self
 
     def has_same_units(self, t):
         unit1 = set(self.units)
@@ -82,7 +100,7 @@ class Unit():
         return c * t**p
 
     def inverse(self):
-        return Unit(1.0 / self.coeff, **{k:-self.units[k] for k in self.units})
+        return 1.0 / self
 
     @sameunits
     def __add__(self, t):
@@ -103,19 +121,14 @@ class Unit():
             for k in t.units:
                 if k in u:
                     u[k] += t.units[k]
-                    if not u[k]:
-                        del u[k]
                 else:
                     u[k] = t.units[k]
-            if u:
-                return Unit(self.coeff * t.coeff, **u)
-            else:
-                return self.coeff * t.coeff
+            return Unit(self.coeff * t.coeff, **u)
         else:
             return Unit(self.coeff * t, **self.units)
 
     def __rmul__(self, t):
-        return self.__mul__(t)
+        return self * t
 
     def __div__(self, t):
         if isinstance(t, Unit):
@@ -125,22 +138,17 @@ class Unit():
             for k in t.units:
                 if k in u:
                     u[k] -= t.units[k]
-                    if not u[k]:
-                        del u[k]
                 else:
                     u[k] = -t.units[k]
 
-            if u:
-                return Unit(self.coeff / t.coeff, **u)
-            else:
-                return self.coeff / t.coeff
+            return Unit(self.coeff / t.coeff, **u)
         else:
             return Unit(self.coeff / t, **self.units)
 
     __truediv__ = __div__
 
     def __rdiv__(self, t):
-        return Unit(1.0 / self.coeff, **{k:-self.units[k] for k in self.units}).__mul__(t)
+        return Unit(t / self.coeff, **{k:-self.units[k] for k in self.units})
 
     __rtruediv__ = __rdiv__
 
@@ -169,6 +177,7 @@ c = 299792458 * m / s
 hbar = 1.0545718e-34 * m**2 * kg / s
 hbarc = 1.97326979e-16 * m * GeV
 kb = 8.61733034e-14 * GeV / kelvin
+G = 6.67408e-11 * m**3 * kg**-1 * s**-2
 
 def __generate_unity():
     unity = {}
@@ -187,3 +196,5 @@ def __generate_unity():
 
 Unit.unity = __generate_unity()
 
+# additional constants
+Mp = (8 * pi * G).in_(GeV).inverse()**Rational(1, 2)

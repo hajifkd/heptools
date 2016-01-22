@@ -3,8 +3,9 @@
 #
 #
 
-from sympy import Matrix, sqrt, zeros, diag
+from sympy import Matrix, ImmutableMatrix, sqrt, zeros, diag
 from itertools import izip
+
 
 class Weight(object):
 
@@ -12,18 +13,17 @@ class Weight(object):
         self.p = p
         self.row = row
         self.cartan_matrix = cartan_matrix
-        self.q = [pi + ri for pi, ri in izip(p, row)]
+        self.q = p + row
 
     def descendants(self):
         for i, cand in enumerate(self.q):
             if not cand:
                 continue
 
-            row = tuple(qi - pi - ci
-                        for qi, pi, ci in izip(self.q, self.p,
-                                               self.cartan_matrix.row(i)))
+            row = self.q - self.p - self.cartan_matrix.row(i)
 
-            yield (row, i, self.p[i] + 1)
+            yield (row.as_immutable(), i, self.p[i] + 1)
+
 
 class Root(object):
 
@@ -34,7 +34,7 @@ class Root(object):
 
         self.row = self.coeff * cartan_matrix
 
-        self.p = [qi - ri for qi, ri in izip(q, self.row)]
+        self.p = q - self.row
 
     def ancestors(self):
         ''' get all the possible root coefficients '''
@@ -43,10 +43,10 @@ class Root(object):
                 continue
 
             # if cand != 0, there must be a root
-            coeff = tuple(w + 1 if i == j else w
-                            for j, w in enumerate(self.coeff))
+            coeff = self.coeff.copy()
+            coeff[i] += 1
 
-            yield (coeff, i, self.q[i] + 1)
+            yield (coeff.as_immutable(), i, self.q[i] + 1)
 
 
 class Algebra(object):
@@ -60,48 +60,92 @@ class SimpleLieAlgebra(Algebra):
         self.rank = cartan_matrix.rows
         self.simple_roots = Matrix(self.construct_simple_roots())
 
-        pcoeff = self.positive_root_coeffcients()
+        pcoeff, self.levels = self.positive_root_coeffcients()
 
-        coeff = ([[0] * self.rank] * self.rank + pcoeff +
+        coeff = (pcoeff + [[0] * self.rank] * self.rank +
                  [[-c for c in e] for e in pcoeff])
 
         self.root_coefficients = Matrix(coeff)
         self.roots = self.root_coefficients * self.simple_roots
         self.fund_weights = self.cartan_matrix.inv() * self.simple_roots
+        self.proots = Matrix(self.roots.tolist()[:len(pcoeff)])
+        self.delta = sum((self.proots.row(i) for i in xrange(len(pcoeff))),
+                         zeros(1, self.rank)) / 2
+
+    def dimension(self, highest):
+        d = 1
+        highest_weight = Matrix([highest]) * self.fund_weights
+        for i in xrange(self.proots.rows):
+            alpha = self.proots.row(i)
+            d *= (1 + alpha.dot(highest_weight) / alpha.dot(self.delta))
+
+        return d
 
     def weights(self, highest):
-        return Matrix(self.weight_coefficients(highest)) * self.fund_weights
+        current_weights = [Weight(ImmutableMatrix([(0, 0)]),
+                                  ImmutableMatrix([highest]),
+                                  self.cartan_matrix)]
+        weights = [Matrix([highest]) * self.fund_weights]
+        highest_weight = weights[0]
+        hd = highest_weight + 2 * self.delta
+        d = {highest_weight.as_immutable(): 1}
+        depth = 0
 
-    def weight_coefficients(self, highest):
-        current_weights = [Weight((0, 0), highest, self.cartan_matrix)]
-        weight_coeffs = [highest]
         while True:
+            depth += 1
             descendants = {}
-            for weights in current_weights:
-                for r, i, pi in weights.descendants():
+            for weight in current_weights:
+                for r, i, pi in weight.descendants():
                     if r in descendants:
                         descendants[r][i] = pi
                     else:
                         descendants[r] = ([0] * i + [pi] +
-                                             [0] * (self.rank - 1 - i))
+                                          [0] * (self.rank - 1 - i))
             if not descendants:
                 break
 
             current_weights = [None] * len(descendants)
             for i, r in enumerate(descendants):
-                weight_coeffs.append(r)
-                current_weights[i] = Weight(descendants[r], r, self.cartan_matrix)
+                weight = (Matrix([r]) * self.fund_weights).as_immutable()
 
-        return weight_coeffs
+                # Freudenthal recursion formula
+                deg = 0
+                denom = (hd + weight).dot(highest_weight - weight)
+
+                for j in xrange(self.proots.rows):
+                    alpha = self.proots.row(j)
+                    level = self.levels[j]
+                    for k in xrange(1, depth / level + 1):
+                        tw = weight + k * alpha
+                        if tw in d:
+                            deg += d[tw] * tw.dot(alpha)
+
+                deg = 2 * deg / denom
+
+                d[weight] = deg
+
+                for j in xrange(deg):
+                    weights.append(weight)
+
+                current_weights[i] = Weight(ImmutableMatrix([descendants[r]]),
+                                            r, self.cartan_matrix)
+
+        return ImmutableMatrix(weights)
 
     def positive_root_coeffcients(self):
         # first, we look for all the positive roots
-        current_roots = [Root((0,) * i + (2,) + (0,) * (self.rank - 1 - i),
-                              (0,) * i + (1,) + (0,) * (self.rank - 1 - i),
-                              self.cartan_matrix) for i in xrange(self.rank)]
+        current_roots = [None] * self.rank
+        for i in xrange(self.rank):
+            cm = ImmutableMatrix([[0] * i + [1] + [0] * (self.rank - 1 - i)])
+            cm2 = (2 * cm).as_immutable()
+            current_roots[i] = Root(cm2, cm, self.cartan_matrix)
+
         positive_roots = [x.coeff for x in current_roots]
+        levels = [1] * self.rank
+        level = 1
 
         while True:
+            level += 1
             ancestors = {}
             for root in current_roots:
                 for w, i, qi in root.ancestors():
@@ -117,9 +161,11 @@ class SimpleLieAlgebra(Algebra):
             current_roots = [None] * len(ancestors)
             for i, w in enumerate(ancestors):
                 positive_roots.append(w)
-                current_roots[i] = Root(ancestors[w], w, self.cartan_matrix)
+                levels.append(level)
+                current_roots[i] = Root(ImmutableMatrix([ancestors[w]]),
+                                        w, self.cartan_matrix)
 
-        return positive_roots
+        return (positive_roots, levels)
 
     def construct_simple_roots(self):
         simple_roots = [None] * self.rank

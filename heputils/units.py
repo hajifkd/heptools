@@ -9,10 +9,12 @@ from sympy import Rational
 # this might be useful
 from math import pi
 
-BASE='GeV'
+BASE = 'GeV'
+
 
 class UnitNotMatchError(Exception):
     pass
+
 
 def sameunits(f):
     @functools.wraps(f)
@@ -21,6 +23,7 @@ def sameunits(f):
             raise UnitNotMatchError()
         return f(u1, u2)
     return wrapper
+
 
 class Unit(object):
 
@@ -111,7 +114,8 @@ class Unit(object):
         return Unit(self.coeff - t.coeff, **self.units)
 
     def __pow__(self, t):
-        return Unit(self.coeff**t, **{k:self.units[k] * t for k in self.units})
+        return Unit(self.coeff**t,
+                    **{k: self.units[k] * t for k in self.units})
 
     def __mul__(self, t):
         if isinstance(t, Unit):
@@ -148,7 +152,7 @@ class Unit(object):
     __truediv__ = __div__
 
     def __rdiv__(self, t):
-        return Unit(t / self.coeff, **{k:-self.units[k] for k in self.units})
+        return Unit(t / self.coeff, **{k: -self.units[k] for k in self.units})
 
     __rtruediv__ = __rdiv__
 
@@ -179,15 +183,16 @@ hbarc = 1.97326979e-16 * m * GeV
 kb = 8.61733034e-14 * GeV / kelvin
 G = 6.67408e-11 * m**3 * kg**-1 * s**-2
 
+
 def __generate_unity():
     unity = {}
     # m
     unity['m'] = (1.0 / hbarc.coeff, -hbarc.units[BASE])
     # s
-    hbarGeV = hbarc / c # s GeV
+    hbarGeV = hbarc / c  # s GeV
     unity['s'] = (1.0 / hbarGeV.coeff, -hbarGeV.units[BASE])
     # kg
-    he = c * hbarc / hbar # GeV/kg
+    he = c * hbarc / hbar  # GeV/kg
     unity['kg'] = (he.coeff, he.units[BASE])
     # kelvin
     unity['kelvin'] = (kb.coeff, kb.units[BASE])

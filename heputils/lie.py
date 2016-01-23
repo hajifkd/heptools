@@ -3,8 +3,8 @@
 #
 #
 
-from sympy import Matrix, ImmutableMatrix, sqrt, zeros, diag
-from itertools import izip
+from sympy import Matrix, ImmutableMatrix, sqrt, zeros, diag, eye
+from itertools import izip, combinations
 
 
 class Weight(object):
@@ -72,6 +72,10 @@ class SimpleLieAlgebra(Algebra):
         self.delta = sum((self.proots.row(i) for i in xrange(len(pcoeff))),
                          zeros(1, self.rank)) / 2
 
+    def index(self, highest):
+        return (self.quad_casimir(highest) * self.dimension(highest) /
+                self.roots.rows)
+
     def dimension(self, highest):
         d = 1
         highest_weight = Matrix([highest]) * self.fund_weights
@@ -81,8 +85,12 @@ class SimpleLieAlgebra(Algebra):
 
         return d
 
+    def quad_casimir(self, highest):
+        highest_weight = Matrix([highest]) * self.fund_weights
+        return highest_weight.norm()**2 + 2 * highest_weight.dot(self.delta)
+
     def weights(self, highest):
-        current_weights = [Weight(ImmutableMatrix([(0, 0)]),
+        current_weights = [Weight(ImmutableMatrix([(0,) * len(highest)]),
                                   ImmutableMatrix([highest]),
                                   self.cartan_matrix)]
         weights = [Matrix([highest]) * self.fund_weights]
@@ -94,13 +102,18 @@ class SimpleLieAlgebra(Algebra):
         while True:
             depth += 1
             descendants = {}
+            degtocalc = []
+
             for weight in current_weights:
                 for r, i, pi in weight.descendants():
                     if r in descendants:
                         descendants[r][i] = pi
+                        if r not in degtocalc:
+                            degtocalc.append(r)
                     else:
                         descendants[r] = ([0] * i + [pi] +
                                           [0] * (self.rank - 1 - i))
+
             if not descendants:
                 break
 
@@ -108,19 +121,28 @@ class SimpleLieAlgebra(Algebra):
             for i, r in enumerate(descendants):
                 weight = (Matrix([r]) * self.fund_weights).as_immutable()
 
-                # Freudenthal recursion formula
-                deg = 0
-                denom = (hd + weight).dot(highest_weight - weight)
+                if r in degtocalc:
+                    # Freudenthal recursion formula
+                    deg = 0
+                    denom = (hd + weight).dot(highest_weight - weight)
 
-                for j in xrange(self.proots.rows):
-                    alpha = self.proots.row(j)
-                    level = self.levels[j]
-                    for k in xrange(1, depth / level + 1):
-                        tw = weight + k * alpha
-                        if tw in d:
-                            deg += d[tw] * tw.dot(alpha)
+                    for j in xrange(self.proots.rows):
+                        alpha = self.proots.row(j)
+                        level = self.levels[j]
+                        tw = weight
+                        # TODO: any root can be a simple root so that no two roots are parallel.
+                        # that means once we find k for a difference, no other root must we find.
+                        # moreover, we do NOT compare all the element. first, we just see some 
+                        # non-zero element and devide it by the one of alpha. if k < depth / level,
+                        # then we compare all the element. this reduces #(summing)
+                        for k in xrange(1, depth / level + 1):
+                            tw += alpha
+                            if tw in d:
+                                deg += d[tw] * tw.dot(alpha)
 
-                deg = 2 * deg / denom
+                    deg = 2 * deg / denom
+                else:
+                    deg = 1
 
                 d[weight] = deg
 
@@ -192,6 +214,7 @@ class SimpleLieAlgebra(Algebra):
                 for j in xrange(self.rank):
                     if not isused[j]:
                         new_dim = j
+                        isused[j] = True
                         break
 
                 root[new_dim] = sqrt(lengthsq - root[prev_new_dim]**2)
@@ -203,6 +226,24 @@ class SimpleLieAlgebra(Algebra):
 
         findroot()
         return simple_roots
+
+
+class A(SimpleLieAlgebra):
+    @staticmethod
+    def cartan_matrix(n):
+        base = eye(n) * 2
+        for i in xrange(1, n):
+            base[i, i - 1] = -1
+            base[i - 1, i] = -1
+
+        return base
+
+    def __init__(self, n):
+        super(A, self).__init__(A.cartan_matrix(n))
+
+
+def su(n):
+    return A(n - 1)
 
 # for debug use
 su3 = SimpleLieAlgebra(Matrix([[2, -1], [-1, 2]]))

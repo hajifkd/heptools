@@ -1,4 +1,4 @@
-# heputils
+# heptools
 High energy physics utilities
 This package provides
 * unit conversion
@@ -10,7 +10,7 @@ and so on. (TBD)
 ## unit calculation
 
 ```python:
-from heputils.units import *
+from heptools.units import *
 
 # 1.52e+15 * GeV**(-1)
 (30 * cm).in_(GeV)
@@ -20,5 +20,17 @@ from heputils.units import *
 
 # 6.58e-25 * s
 (GeV**-1).in_(s)
+```
+
+## Lie algebra
+We should improve the algorithm referring to 1206.6379.
+Also, we are going to implement representation classes.
+
+```python:
+from heptools.lie import *
+
+su3 = su(3)
+su3.index([3,0])
+
 ```
 

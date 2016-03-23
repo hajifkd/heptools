@@ -18,7 +18,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='heputils',
+    name='heptools',
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
@@ -70,7 +70,7 @@ setup(
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=find_packages(exclude=['heputils']),
+    packages=find_packages(exclude=['heptools']),
 
     # Alternatively, if you want to distribute just a my_module.py, uncomment
     # this:

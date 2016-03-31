@@ -4,6 +4,8 @@
 #
 
 import functools
+import sys
+
 from sympy import Rational
 
 # this might be useful
@@ -101,6 +103,13 @@ class Unit(object):
     def in_(self, t):
         c, p = self.convert(t)
         return c * t**p
+
+    def __getattr__(self, name):
+        if name.startswith('in_'):
+            u = getattr(sys.modules[__name__], name[3:])
+            return functools.partial(self.in_, u)
+        else:
+            raise AttributeError
 
     def inverse(self):
         return 1.0 / self

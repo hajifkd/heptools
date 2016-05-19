@@ -51,7 +51,7 @@ def standardize(snake):
     '''
     return ''.join(x.title() for x in snake.split('_'))[:-1]
 
-def load_root_file(root_file):
+def load_root_file(*args):
     '''This function starts to load the specified root file.
     
     Each callbacks are called once this function is called.
@@ -59,10 +59,11 @@ def load_root_file(root_file):
     this function stops to load the root file anymore.
 
     Args:
-        root_file (str): a path to the root file to load
+        *args: A list of paths to the root file to load
     '''
     chain = TChain(DELPHES_BRANCH)
-    chain.Add(root_file)
+    for root_file in args:
+        chain.Add(root_file)
     tree_reader = ExRootTreeReader(chain)
     branches = {n: tree_reader.UseBranch(n) for n in delphes_name}
 

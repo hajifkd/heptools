@@ -37,12 +37,7 @@ class Unit(object):
                 self.units[k] = kwargs[k]
 
     def __new__(cls, coeff, **kwargs):
-        flag = False
-        for k in kwargs:
-            if kwargs[k]:
-                flag = True
-                break
-        if flag:
+        if any(kwargs.values()):
             return super(Unit, cls).__new__(cls)
         else:
             return coeff
@@ -167,7 +162,7 @@ class Unit(object):
 
     @sameunits
     def __cmp__(self, t):
-        return self.coeff.__cmp__(t.coeff)
+        return self.coeff - t.coeff
 
     def __hash__(self):
         return self.coeff.__hash__() ^ self.units.__hash__()

@@ -27,14 +27,39 @@ def sameunits(f):
     return wrapper
 
 
+def use_subunits(f):
+    @functools.wraps(f)
+    def wrapper(u1, u2):
+        if isinstance(u1, Unit):
+            subunits = {k: u1.subunits[k] for k in u1.subunits}
+        else:
+            subunits = {}
+
+        if isinstance(u2, Unit):
+            for k in u2.subunits:
+                subunits[k] = u2.subunits[k]
+
+        result = f(u1, u2)
+        if isinstance(result, Unit):
+            result.subunits = subunits
+        return result
+    return wrapper
+
+
 class Unit(object):
 
-    def __init__(self, coeff, **kwargs):
-        self.coeff = coeff
+    def __init__(self, coeff, subunit=None, **kwargs):
+        self.coeff = 1. * coeff
         self.units = {}
         for k in kwargs:
             if kwargs[k]:
                 self.units[k] = kwargs[k]
+
+        if subunit and len(kwargs) == 1:
+            k = kwargs.keys()[0]
+            self.subunits = {k: (coeff, subunit, kwargs[k])}
+        else:
+            self.subunits = {}
 
     def __new__(cls, coeff, **kwargs):
         if any(kwargs.values()):
@@ -42,30 +67,44 @@ class Unit(object):
         else:
             return coeff
 
-    def __str__(self):
-        res = '%3.2e' % self.coeff
+    def str_expression(self, mult, power):
+        coeff = 1.
+        res=''
+
         for k in self.units:
-            if self.units[k] == 1:
-                res += ' %s' % k
+            if k in self.subunits:
+                c, rn, m = self.subunits[k]
+                coeff *= c**(self.units[k] / m)
             else:
-                res += ' %s^%s' % (k, str(self.units[k]))
+                rn = k
+                m = 1
+
+            newunit = Rational(self.units[k], m)
+
+            if newunit == 1:
+                res += '%s %s' % (mult, rn)
+            else:
+                res += '%s %s%s%s' % (mult, rn, power, str(newunit))
+
+        res = '%3.2e%s' % (self.coeff / coeff, res)
+
         return res
 
+    def __str__(self):
+        return self.str_expression('', '^')
+
     def __repr__(self):
-        res = '%3.2e' % self.coeff
-        for k in self.units:
-            if self.units[k] == 1:
-                res += ' * %s' % k
-            else:
-                res += ' * %s**(%s)' % (k, str(self.units[k]))
-        return res
+        return self.str_expression(' *', '**')
 
     def __call__(self, coeff):
         return coeff * self
 
     def has_same_units(self, t):
         unit1 = set(self.units)
-        unit2 = set(t.units)
+        if isinstance(t, Unit):
+            unit2 = set(t.units)
+        else:
+            unit2 = set()
 
         if unit1 != unit2:
             return False
@@ -89,6 +128,10 @@ class Unit(object):
 
         return coeff, p
 
+    def to_planck_unit(self):
+        c, p = self.to_natural_unit()
+        return c * Mp.coeff**(-p)
+
     def convert(self, t):
         sc, sp = self.to_natural_unit()
         tc, tp = t.to_natural_unit()
@@ -110,17 +153,21 @@ class Unit(object):
         return 1.0 / self
 
     @sameunits
+    @use_subunits
     def __add__(self, t):
         return Unit(self.coeff + t.coeff, **self.units)
 
     @sameunits
+    @use_subunits
     def __sub__(self, t):
         return Unit(self.coeff - t.coeff, **self.units)
 
+    @use_subunits
     def __pow__(self, t):
         return Unit(self.coeff**t,
                     **{k: self.units[k] * t for k in self.units})
 
+    @use_subunits
     def __mul__(self, t):
         if isinstance(t, Unit):
             u = {}
@@ -138,6 +185,7 @@ class Unit(object):
     def __rmul__(self, t):
         return self * t
 
+    @use_subunits
     def __div__(self, t):
         if isinstance(t, Unit):
             u = {}
@@ -155,6 +203,7 @@ class Unit(object):
 
     __truediv__ = __div__
 
+    @use_subunits
     def __rdiv__(self, t):
         return Unit(t / self.coeff, **{k: -self.units[k] for k in self.units})
 
@@ -169,13 +218,7 @@ class Unit(object):
 
 # units
 GeV = Unit(1, GeV=1)
-MeV = Unit(1e-3, GeV=1)
-keV = Unit(1e-6, GeV=1)
-
 m = Unit(1, m=1)
-km = Unit(1e3, m=1)
-cm = Unit(1e-2, m=1)
-
 s = Unit(1, s=1)
 kg = Unit(1, kg=1)
 kelvin = Unit(1, kelvin=1)
@@ -184,7 +227,7 @@ kelvin = Unit(1, kelvin=1)
 c = 299792458 * m / s
 hbar = 1.0545718e-34 * m**2 * kg / s
 hbarc = 1.97326979e-16 * m * GeV
-kb = 8.61733034e-14 * GeV / kelvin
+kB = 8.61733034e-14 * GeV / kelvin
 G = 6.67408e-11 * m**3 * kg**-1 * s**-2
 
 
@@ -199,11 +242,50 @@ def __generate_unity():
     he = c * hbarc / hbar  # GeV/kg
     unity['kg'] = (he.coeff, he.units[BASE])
     # kelvin
-    unity['kelvin'] = (kb.coeff, kb.units[BASE])
+    unity['kelvin'] = (kB.coeff, kB.units[BASE])
 
     return unity
 
 Unit.unity = __generate_unity()
 
-# additional constants
+# Planck constant
 Mp = (8 * pi * G).in_(GeV).inverse()**Rational(1, 2)
+
+# barn
+b = Unit(1e-28, subunit='b', m=2)
+
+# standard suffixes
+def __add_subunits():
+    for i, sx in enumerate('zafpnum kMGTPE'):
+        if sx == ' ':
+            sx = ''
+
+        base = 10**(-21 + i * 3)
+
+        if sx:
+            # barn
+            name = '%cb' % sx
+            u = Unit(1e-28 * base, subunit=name, m=2)
+            setattr(sys.modules[__name__], name, u)
+
+        for unit in ('GeV', 'm', 's', 'kg'):
+            if unit == 'GeV':
+                nname = 'eV'
+                basecoeff = 1e-9
+            elif unit == 'kg':
+                nname = 'g'
+                basecoeff = 1e-3
+            else:
+                nname = unit
+                basecoeff = 1.0
+
+            name = '%s%s' % (sx, nname)
+
+            if name == unit:
+                continue
+
+            u = Unit(base * basecoeff, subunit=name, **{unit: 1})
+            setattr(sys.modules[__name__], name, u)
+
+__add_subunits()
+cm = Unit(1e-2, subunit='cm', m=1)

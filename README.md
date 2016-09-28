@@ -13,13 +13,19 @@ and so on. (TBD)
 from heptools.units import *
 
 # 1.52e+15 * GeV**(-1)
-(30 * cm).in_(GeV)
+(30 * cm).in_GeV()
 
 # 6.58e-16 * GeV
-(30 * cm).in_(GeV).inverse()
+(30 * cm).in_GeV().inverse()
 
 # 6.58e-25 * s
-(GeV**-1).in_(s)
+(GeV**-1).in_s()
+
+# 1.00e-39 * cm**2
+fb.in_cm()
+
+# 3.89e+11 * GeV**2
+fb.inverse().in_GeV()
 ```
 
 ## Lie algebra

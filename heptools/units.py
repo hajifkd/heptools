@@ -254,9 +254,6 @@ Mp = (8 * pi * G).in_(GeV).inverse()**Rational(1, 2)
 # barn
 b = Unit(1e-28, subunit='b', m=2)
 
-# year
-year = Unit(60 * 60 * 24 * 365, subunit='year', s=1)
-
 # standard suffixes
 def __add_subunits():
     for i, sx in enumerate('zafpnum kMGTPE'):

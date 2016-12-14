@@ -289,3 +289,7 @@ def __add_subunits():
 
 __add_subunits()
 cm = Unit(1e-2, subunit='cm', m=1)
+minute = Unit(60, subunit='minute', s=1)
+hour = Unit(60 * 60, subunit='hour', s=1)
+day = Unit(60 * 60 * 24, subunit='day', s=1)
+year = Unit(60 * 60 * 24 * 365, subunit='year', s=1)
